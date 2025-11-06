@@ -43,7 +43,8 @@ class CanvaAuthController extends Controller
 
     // Validate state
     if ($state !== Session::get('canva_state')) {
-        return response()->json(['error' => 'Invalid state'], 400);
+        // Redirect to frontend with error
+        return redirect(env('FRONTEND_URL') . '?auth=failed&error=invalid_state');
     }
 
     $verifier = Session::get('canva_verifier');
@@ -64,17 +65,21 @@ class CanvaAuthController extends Controller
     ]);
 
     if ($tokenResponse->failed()) {
-        return response()->json([
-            'error' => 'Token exchange failed', 
-            'details' => $tokenResponse->json(),
-            'status' => $tokenResponse->status()
-        ], 400);
+        // Redirect to frontend with error
+        return redirect(env('FRONTEND_URL') . '?auth=failed&error=token_exchange_failed');
     }
 
     $tokens = $tokenResponse->json();
+    
+    // Store tokens in session (or database for production)
     Session::put('canva_token', $tokens);
+    
+    // Clean up temporary OAuth state
+    // Session::forget('canva_state');
+    // Session::forget('canva_verifier');
 
-    return response()->json(['success' => true, 'tokens' => $tokens]);
+    // ✅ Redirect back to frontend with success
+    return redirect(env('FRONTEND_URL') . '?auth=success');
 }
 
     public function revoke()
@@ -95,9 +100,9 @@ class CanvaAuthController extends Controller
         'token' => $tokens['refresh_token'],
     ]);
 
-    Session::forget('canva_token');
-    Session::forget('canva_state');
-    Session::forget('canva_verifier');
+    // Session::forget('canva_token');
+    // Session::forget('canva_state');
+    // Session::forget('canva_verifier');
     
     return response()->json(['revoked' => true]);
 }
@@ -106,4 +111,79 @@ class CanvaAuthController extends Controller
     {
         return response()->json(['authorized' => Session::has('canva_token')]);
     }
+
+    // In CanvaAuthController.php
+public function returnNav(Request $request)
+{
+    $correlationJwt = $request->query('correlation_jwt');
+    
+    if (!$correlationJwt) {
+        return redirect(env('FRONTEND_URL') . '?error=missing_jwt');
+    }
+
+    try {
+        // Verify the JWT
+        if (!$this->verifyCanvaJwt($correlationJwt)) {
+            return redirect(env('FRONTEND_URL') . '?error=invalid_jwt');
+        }
+
+        // Decode the JWT to extract design_id and correlation_state
+        $parts = explode('.', $correlationJwt);
+        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+        
+        $designId = $payload['design_id'] ?? null;
+        $correlationState = $payload['correlation_state'] ?? null;
+
+        // Redirect to your frontend with the parameters
+        $frontendUrl = env('FRONTEND_URL') . '/#/return-nav?' . http_build_query([
+            'design_id' => $designId,
+            'correlation_state' => $correlationState
+        ]);
+
+        return redirect($frontendUrl);
+        
+    } catch (\Exception $e) {
+        \Log::error('Return navigation failed: ' . $e->getMessage());
+        return redirect(env('FRONTEND_URL') . '?error=processing_failed');
+    }
+}
+
+private function verifyCanvaJwt($token)
+{
+    try {
+        // Fetch Canva's public keys
+        $keysUrl = 'https://api.canva.com/rest/v1/connect/keys';
+        $keysResponse = Http::get($keysUrl);
+        
+        if ($keysResponse->failed()) {
+            return false;
+        }
+        
+        $keys = $keysResponse->json();
+        
+        // For now, basic validation - you should use firebase/php-jwt for proper verification
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            return false;
+        }
+        
+        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+        
+        // Verify audience matches your client ID
+        if (!isset($payload['aud']) || $payload['aud'] !== env('CANVA_CLIENT_ID')) {
+            return false;
+        }
+        
+        // Verify expiration
+        if (!isset($payload['exp']) || $payload['exp'] < time()) {
+            return false;
+        }
+        
+        return true;
+        
+    } catch (\Exception $e) {
+        \Log::error('JWT verification failed: ' . $e->getMessage());
+        return false;
+    }
+}
 }
