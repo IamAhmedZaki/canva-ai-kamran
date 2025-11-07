@@ -75,8 +75,8 @@ class CanvaAuthController extends Controller
     Session::put('canva_token', $tokens);
     
     // Clean up temporary OAuth state
-    // Session::forget('canva_state');
-    // Session::forget('canva_verifier');
+    Session::forget('canva_state');
+    Session::forget('canva_verifier');
 
     // ✅ Redirect back to frontend with success
     return redirect(env('FRONTEND_URL') . '?auth=success');
@@ -100,9 +100,9 @@ class CanvaAuthController extends Controller
         'token' => $tokens['refresh_token'],
     ]);
 
-    // Session::forget('canva_token');
-    // Session::forget('canva_state');
-    // Session::forget('canva_verifier');
+    Session::forget('canva_token');
+    Session::forget('canva_state');
+    Session::forget('canva_verifier');
     
     return response()->json(['revoked' => true]);
 }
@@ -112,7 +112,7 @@ class CanvaAuthController extends Controller
         return response()->json(['authorized' => Session::has('canva_token')]);
     }
 
-    // In CanvaAuthController.php
+   
 public function returnNav(Request $request)
 {
     $correlationJwt = $request->query('correlation_jwt');
