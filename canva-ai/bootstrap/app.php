@@ -13,10 +13,24 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->alias([
-            'canva.auth' => CanvaAuthMiddleware::class,
-        ]);
-    })
+    $middleware->alias([
+        'canva.auth' => \App\Http\Middleware\CanvaAuthMiddleware::class,
+    ]);
+
+    // Allow session on web routes (including your /canva/*)
+    $middleware->web(append: [
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Http\Middleware\HandleCors::class,
+    ]);
+
+    // This is the KEY: Make API routes stateful when coming from frontend
+    // $middleware->statefulApi();
+
+    $middleware->validateCsrfTokens(except: [
+        'canva/*',
+    ]);
+})
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();

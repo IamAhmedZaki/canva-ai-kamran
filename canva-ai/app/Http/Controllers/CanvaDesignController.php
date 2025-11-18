@@ -31,36 +31,63 @@ class CanvaDesignController extends Controller
 
     // Create a new design in Canva
     public function createDesign(Request $request)
-    {
-        $request->validate([
-            'asset_type' => 'required|string',
-            'title' => 'nullable|string'
-        ]);
+{
+    $request->validate([
+        'title' => 'nullable|string',
+        'design_name' => 'required|string|in:doc,whiteboard,presentation', // validate preset types
+        'asset_id' => 'nullable|string'
+    ]);
 
-        $tokens = Session::get('canva_token');
-        
-        $response = Http::withToken($tokens['access_token'])
-            ->post('https://api.canva.com/rest/v1/designs', [
-                'asset_type' => $request->asset_type,
-                'title' => $request->title ?? 'New Design'
-            ]);
+    $tokens = Session::get('canva_token');
 
-        if ($response->failed()) {
-            return response()->json(['error' => 'Failed to create design'], 400);
-        }
-
-        $designData = $response->json();
-        
-        // Store design in database
-        $design = Design::create([
-            'canva_design_id' => $designData['design']['id'],
-            'title' => $request->title ?? 'New Design',
-            'asset_type' => $request->asset_type,
-            'edit_url' => $designData['design']['urls']['edit_url'],
-        ]);
-
-        return response()->json($design);
+    if (!$tokens || !isset($tokens['access_token'])) {
+        return response()->json(['error' => 'No access token found'], 401);
     }
+
+    // Canva API body
+    $body = [
+        "design_type" => [
+            "type" => "preset",
+            "name" => $request->design_name  // doc | presentation | whiteboard
+        ],
+        "title" => $request->title ?? "New Design",
+    ];
+
+    // Optional image asset auto-insert
+    if ($request->asset_id) {
+        $body["asset_id"] = $request->asset_id;
+    }
+
+    $response = Http::withHeaders([
+        'Authorization' => 'Bearer ' . $tokens['access_token'],
+        'Content-Type' => 'application/json',
+    ])->post('https://api.canva.com/rest/v1/designs', $body);
+
+    if ($response->failed()) {
+        return response()->json([
+            'error' => 'Failed to create design',
+            'details' => $response->json(),
+            'status' => $response->status(),
+        ], $response->status());
+    }
+
+    $designData = $response->json();
+
+    // Save to DB
+    $design = Design::create([
+        'canva_design_id' => $designData['design']['id'],
+        'title' => $designData['design']['title'],
+        'asset_type' => 'design',
+        'edit_url' => $designData['design']['urls']['edit_url'],
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'design' => $design,
+        'canva' => $designData,
+    ]);
+}
+
 
     // Export design
     public function exportDesign(Request $request)
