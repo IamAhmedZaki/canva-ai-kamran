@@ -62,8 +62,9 @@ function ConnectCanvaButton() {
         
         // Open the design in Canva editor
         if (data.design.edit_url) {
-          window.open(data.design.edit_url, "_blank");
-        }
+  window.location.href = data.design.edit_url;
+}
+
 
         // Reset form
         setFormData({
@@ -126,7 +127,7 @@ function ConnectCanvaButton() {
       )}
 
       {/* Create Design Section */}
-      {true && (
+      {isConnected && (
         <div>
           <button
             style={{

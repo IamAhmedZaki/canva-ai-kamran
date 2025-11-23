@@ -23,6 +23,9 @@ Route::get('/', function () {
 // Route::get('/canva/designs/{id}', [CanvaDesignController::class, 'getDesign']);
 
 
+
+
+
 Route::post('/canva/designs/create', [CanvaDesignController::class, 'createDesign']);
 Route::post('/canva/designs/export', [CanvaDesignController::class, 'exportDesign']);
 Route::post('/canva/designs/download', [CanvaDesignController::class, 'downloadExport']);

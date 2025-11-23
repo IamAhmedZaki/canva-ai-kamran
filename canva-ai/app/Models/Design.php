@@ -8,6 +8,7 @@ class Design extends Model
 {
      protected $fillable = [
         'canva_design_id',
+        'user_id',
         'title',
         'asset_type',
         'edit_url',
